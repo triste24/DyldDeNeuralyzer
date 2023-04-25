@@ -48,11 +48,19 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		2B08542B29F7ACAF00A9BA4B /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		C214FCA02971B3B300C33274 = {
 			isa = PBXGroup;
 			children = (
 				C214FCAB2971B3B300C33274 /* DyldDeNeuralyzer */,
 				C214FCAA2971B3B300C33274 /* Products */,
+				2B08542B29F7ACAF00A9BA4B /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
@@ -89,8 +97,8 @@
 		C214FCBB2976C63900C33274 /* DyldPatch */ = {
 			isa = PBXGroup;
 			children = (
-				C214FCBC2976C66100C33274 /* dyldpatch.m */,
 				C214FCBE2976C69E00C33274 /* dyldpatch.h */,
+				C214FCBC2976C66100C33274 /* dyldpatch.m */,
 			);
 			path = DyldPatch;
 			sourceTree = "<group>";
@@ -215,7 +223,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 13.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -277,8 +285,9 @@
 				CODE_SIGN_ENTITLEMENTS = DyldDeNeuralyzer/DyldDeNeuralyzer.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 66GENWGHQ7;
+				DEVELOPMENT_TEAM = JH23ZR9LF5;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -289,8 +298,9 @@
 				CODE_SIGN_ENTITLEMENTS = DyldDeNeuralyzer/DyldDeNeuralyzer.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 66GENWGHQ7;
+				DEVELOPMENT_TEAM = JH23ZR9LF5;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

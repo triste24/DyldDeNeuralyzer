@@ -7,7 +7,6 @@
 
 #ifndef dyldpatch_h
 #define dyldpatch_h
-#define FILENAME_SEARCH "/usr/lib/libffi-trampolines.dylib"
 
 void patchDyld(char *path);
 
