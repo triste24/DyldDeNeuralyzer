@@ -10,9 +10,16 @@
 #include <mach-o/dyld_images.h>
 #include "dyldpatch.h"
 
-char       *memoryLoadedFile = NULL;
-//const char *dylibName  = "NSCreateObjectFileImageFromMemory";
+//#define FLAG FALSE
+#define FLAG TRUE
+
+#if FLAG
+const char *dylibName  = "NSCreateObjectFileImageFromMemory";
+#else
 const char *dylibName = "libobjc-trampolines.dylib";
+#endif
+
+char *memoryLoadedFile = NULL;
 const char *dylibPath = "/usr/lib/libobjc-trampolines.dylib";
 
 // ldr x8, value; br x8; value: .ascii "\x41\x42\x43\x44\x45\x46\x47\x48"
@@ -205,44 +212,47 @@ void patchDyld (char *path) {
     searchAndPatch(dyldBase, preadSig, sizeof(preadSig), hookedPread);
     searchAndPatch(dyldBase, fcntlSig, sizeof(fcntlSig), hookedFcntl);
 
-    //    // Set up blank content, same size as our Mach-O
-    //    char *fakeImage = (char *)malloc(size);
-    //    memset(fakeImage, 0x41, size);
-    //
-    //    // Small hack to get around NSCreateObjectFileImageFromMemory validating our fake image
-    //    fileImage = (NSObjectFileImage)malloc(1024);
-    //    *(void **)(((char*)fileImage+0x8)) = fakeImage;
-    //    *(void **)(((char*)fileImage+0x10)) = size;
-    //
-    //    NSModule *module = NSLinkModule(fileImage, "test", NSLINKMODULE_OPTION_PRIVATE);
-    //    if(module == NULL) {
-    //        printf("%s\n", dlerror());
-    //        return;
-    //    }
-    //    printf("module:%s\n", NSLibraryNameForModule(module));
-    //
-    //    void *symbol = NSLookupSymbolInModule(module, "_main");
-    //    if(symbol == NULL) {
-    //        printf("%s\n", dlerror());
-    //        return;
-    //    }
-    //
-    //    function = NSAddressOfSymbol(symbol);
-    //    function();
+    if (FLAG) {
+        // Set up blank content, same size as our Mach-O
+        char *fakeImage = (char *)malloc(size);
+        memset(fakeImage, 0x41, size);
 
-    void *lib = dlopen(dylibPath, RTLD_NOW);
-    if (lib == NULL) {
-        printf("%s\n", dlerror());
-        return;
+        // Small hack to get around NSCreateObjectFileImageFromMemory validating our fake image
+        fileImage                              = (NSObjectFileImage)malloc(1024);
+        *(void **)(((char *)fileImage + 0x8))  = fakeImage;
+        *(void **)(((char *)fileImage + 0x10)) = size;
+
+        NSModule *module = NSLinkModule(fileImage, "test", NSLINKMODULE_OPTION_PRIVATE);
+        if (module == NULL) {
+            printf("%s\n", dlerror());
+            return;
+        }
+        printf("module:%s\n", NSLibraryNameForModule(module));
+
+        void *symbol = NSLookupSymbolInModule(module, "_main");
+        if (symbol == NULL) {
+            printf("%s\n", dlerror());
+            return;
+        }
+
+        function = NSAddressOfSymbol(symbol);
+        printf("[*NS] Invoking loaded function at %p... hold onto your butts....!!\n", function);
+    } else {
+        void *lib = dlopen(dylibPath, RTLD_NOW);
+        if (lib == NULL) {
+            printf("%s\n", dlerror());
+            return;
+        }
+
+        function = dlsym(lib, "main");
+        if (function == NULL) {
+            printf("%s\n", dlerror());
+            return;
+        }
+
+        printf("[*dyld] Invoking loaded function at %p... hold onto your butts....!!\n", function);
     }
 
-    function = dlsym(lib, "main");
-    if (function == NULL) {
-        printf("%s\n", dlerror());
-        return;
-    }
-
-    printf("[*] Invoking loaded function at %p... hold onto your butts....!!\n", function);
     function();
 
 }
