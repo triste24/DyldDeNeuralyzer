@@ -10,17 +10,10 @@
 #include <mach-o/dyld_images.h>
 #include "dyldpatch.h"
 
-//#define FLAG FALSE
-#define FLAG TRUE
+const char *dylibName        = "NSCreateObjectFileImageFromMemory";
+char       *memoryLoadedFile = NULL;
 
-#if FLAG
-const char *dylibName  = "NSCreateObjectFileImageFromMemory";
-#else
-const char *dylibName = "libobjc-trampolines.dylib";
-#endif
-
-char *memoryLoadedFile = NULL;
-const char *dylibPath = "/usr/lib/libobjc-trampolines.dylib";
+#pragma mark hook mmap & pread & fcntl
 
 // ldr x8, value; br x8; value: .ascii "\x41\x42\x43\x44\x45\x46\x47\x48"
 char patch[] = {0x88, 0x00, 0x00, 0x58, 0x00, 0x01, 0x1f, 0xd6, 0x1f, 0x20, 0x03, 0xd5, 0x1f, 0x20, 0x03, 0xd5, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0x41};
@@ -62,12 +55,17 @@ bool searchAndPatch (char *base, char *signature, int length, void *target) {
     return TRUE;
 }
 
+static unsigned long bundleAddr = 0;
+
 const void *hookedMmap (void *addr, size_t len, int prot, int flags, int fd, off_t offset) {
     char *alloc;
     char  filePath[PATH_MAX];
     int   newFlags;
 
-    printf("[*] mmap Called: addr=%p len=%d prot=%x flags=%x fd=%d offset=%x\n", addr, len, prot, flags, fd, offset);
+    printf("[mmap] mmap Called: addr=%p len=%ld prot=%x flags=%x fd=%d offset=%llx\n", addr, len, prot, flags, fd, offset);
+    if (bundleAddr == 0 && addr != 0) {
+        bundleAddr = (unsigned long)addr;
+    }
 
     memset(filePath, 0, sizeof(filePath));
 
@@ -75,8 +73,8 @@ const void *hookedMmap (void *addr, size_t len, int prot, int flags, int fd, off
     if (fcntl(fd, F_GETPATH, filePath) != -1) {
         if (strstr(filePath, dylibName) > 0) {
 
-            printf("[*] mmap fd %d is for [%s]\n", fd, filePath);
-            printf("[*] Redirecting mmap with memory copy\n");
+            printf("[mmap] mmap fd %d is for [%s]\n", fd, filePath);
+            printf("[mmap] Redirecting mmap with memory copy\n");
 
             newFlags = MAP_PRIVATE | MAP_ANONYMOUS;
             if (addr != 0) {
@@ -97,7 +95,7 @@ const void *hookedMmap (void *addr, size_t len, int prot, int flags, int fd, off
 ssize_t hookedPread (int fd, void *buf, size_t nbyte, int offset) {
     char filePath[PATH_MAX];
 
-    printf("[*] pread Called: fd=%d buf=%p nbyte=%x offset=%x\n", fd, buf, nbyte, offset);
+    printf("[pread] pread Called: fd=%d buf=%p nbyte=%zx offset=%x\n", fd, buf, nbyte, offset);
 
     memset(filePath, 0, sizeof(filePath));
 
@@ -105,8 +103,8 @@ ssize_t hookedPread (int fd, void *buf, size_t nbyte, int offset) {
     if (fcntl(fd, F_GETPATH, filePath) != -1) {
         if (strstr(filePath, dylibName) > 0) {
 
-            printf("[*] pread fd %d is for [%s]\n", fd, filePath);
-            printf("[*] Redirecting pread with memory copy\n");
+            printf("[pread] pread fd %d is for [%s]\n", fd, filePath);
+            printf("[pread] Redirecting pread with memory copy\n");
 
             memcpy(buf, memoryLoadedFile + offset, nbyte);
             return nbyte;
@@ -121,7 +119,7 @@ int hookedFcntl (int fildes, int cmd, void *param) {
 
     char filePath[PATH_MAX];
 
-    printf("[*] fcntl Called: fd=%d cmd=%x param=%p\n", fildes, cmd, param);
+    printf("[fcntl] fcntl Called: fd=%d cmd=%x param=%p\n", fildes, cmd, param);
 
     memset(filePath, 0, sizeof(filePath));
 
@@ -129,11 +127,11 @@ int hookedFcntl (int fildes, int cmd, void *param) {
     if (fcntl(fildes, F_GETPATH, filePath) != -1) {
         if (strstr(filePath, dylibName) > 0) {
 
-            printf("[*] fcntl fd %d is for [%s]\n", fildes, filePath);
+            printf("[fcntl] fcntl fd %d is for [%s]\n", fildes, filePath);
 
             if (cmd == F_ADDFILESIGS_RETURN) {
 
-                printf("[*] fcntl F_ADDFILESIGS_RETURN received, setting 0xFFFFFFFF\n");
+                printf("[fcntl] fcntl F_ADDFILESIGS_RETURN received, setting 0xFFFFFFFF\n");
 
                 fsignatures_t *fsig = (fsignatures_t *)param;
 
@@ -145,7 +143,7 @@ int hookedFcntl (int fildes, int cmd, void *param) {
             // Signature sanity check by dyld
             if (cmd == F_CHECK_LV) {
 
-                printf("[*] fcntl F_CHECK_LV received, telling dyld everything is fine\n");
+                printf("[fcntl] fcntl F_CHECK_LV received, telling dyld everything is fine\n");
 
                 // Just say everything is fine
                 return 0;
@@ -176,13 +174,35 @@ void *getDyldBase (void) {
     image_infos = dyld_info.all_image_info_addr;
 
     infos = (struct dyld_all_image_infos *)image_infos;
-    return infos->dyldImageLoadAddress;
+    return (void *)infos->dyldImageLoadAddress;
 }
 
-int readFile (char *path, char **data) {
+bool patchDyld (void) {
+    char *dyldBase = getDyldBase();
+    bool  patched  = searchAndPatch(dyldBase, mmapSig, sizeof(mmapSig), hookedMmap);
+    if (!patched) {
+        return false;
+    }
+
+    patched = searchAndPatch(dyldBase, preadSig, sizeof(preadSig), hookedPread);
+    if (!patched) {
+        return false;
+    }
+
+    patched = searchAndPatch(dyldBase, fcntlSig, sizeof(fcntlSig), hookedFcntl);
+    if (!patched) {
+        return false;
+    }
+
+    return true;
+}
+
+#pragma mark - loader
+
+ssize_t readFile (const char *path, char **data) {
     int         fd;
     struct stat st;
-    int         bytesRead;
+    ssize_t     bytesRead;
 
     fd = open(path, O_RDONLY);
     if (fd < 0) {
@@ -197,62 +217,79 @@ int readFile (char *path, char **data) {
     return bytesRead;
 }
 
-void patchDyld (char *path) {
-    char             *dyldBase;
-    int               fd;
-    int               size;
-    void              (*function)(void);
-    NSObjectFileImage fileImage;
+int find_epc (unsigned long addr, struct entry_point_command **entry) {
+    // find the entry point command by searching through base's load commands
 
-    // Read in our dyld we want to memory load... obviously swap this in prod with memory, otherwise we've just recreated dlopen :/
-    size = readFile(path, &memoryLoadedFile);
+    struct mach_header_64 *mh;
+    struct load_command   *lc;
 
-    dyldBase = getDyldBase();
-    searchAndPatch(dyldBase, mmapSig, sizeof(mmapSig), hookedMmap);
-    searchAndPatch(dyldBase, preadSig, sizeof(preadSig), hookedPread);
-    searchAndPatch(dyldBase, fcntlSig, sizeof(fcntlSig), hookedFcntl);
+    *entry = NULL;
 
-    if (FLAG) {
-        // Set up blank content, same size as our Mach-O
-        char *fakeImage = (char *)malloc(size);
-        memset(fakeImage, 0x41, size);
-
-        // Small hack to get around NSCreateObjectFileImageFromMemory validating our fake image
-        fileImage                              = (NSObjectFileImage)malloc(1024);
-        *(void **)(((char *)fileImage + 0x8))  = fakeImage;
-        *(void **)(((char *)fileImage + 0x10)) = size;
-
-        NSModule *module = NSLinkModule(fileImage, "test", NSLINKMODULE_OPTION_PRIVATE);
-        if (module == NULL) {
-            printf("%s\n", dlerror());
-            return;
-        }
-        printf("module:%s\n", NSLibraryNameForModule(module));
-
-        void *symbol = NSLookupSymbolInModule(module, "_main");
-        if (symbol == NULL) {
-            printf("%s\n", dlerror());
-            return;
+    mh = (struct mach_header_64 *)addr;
+    lc = (struct load_command *)(addr + sizeof(struct mach_header_64));
+    for (int i = 0; i < mh->ncmds; i++) {
+        if (lc->cmd == LC_MAIN) {    // 0x80000028
+            *entry = (struct entry_point_command *)lc;
+            return 0;
         }
 
-        function = NSAddressOfSymbol(symbol);
-        printf("[*NS] Invoking loaded function at %p... hold onto your butts....!!\n", function);
-    } else {
-        void *lib = dlopen(dylibPath, RTLD_NOW);
-        if (lib == NULL) {
-            printf("%s\n", dlerror());
-            return;
-        }
-
-        function = dlsym(lib, "main");
-        if (function == NULL) {
-            printf("%s\n", dlerror());
-            return;
-        }
-
-        printf("[*dyld] Invoking loaded function at %p... hold onto your butts....!!\n", function);
+        lc = (struct load_command *)((unsigned long)lc + lc->cmdsize);
     }
 
-    function();
+    return 1;
+}
 
+int startLoader (int argc, const char *argv[], const char *path) {
+    if (!patchDyld()) {
+        return 1;
+    }
+
+    ssize_t                     size;
+    NSObjectFileImage           fileImage;
+    NSModule                    module;
+    struct entry_point_command *epc;
+    int                         (*main)(int, const char **, char **, char **);
+    char                       *env[]   = {NULL};
+    char                       *apple[] = {NULL};
+
+    size = readFile(path, &memoryLoadedFile);
+    char *fakeImage = (char *)malloc(size);
+    memset(fakeImage, 0x41, size);
+
+    // Small hack to get around NSCreateObjectFileImageFromMemory validating our fake image
+    fileImage                              = (NSObjectFileImage)malloc(1024);
+    *(void **)(((char *)fileImage + 0x8))  = fakeImage;
+    *(void **)(((char *)fileImage + 0x10)) = (void *)size;
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    module = NSLinkModule(fileImage, "loader", NSLINKMODULE_OPTION_PRIVATE);
+    if (module == NULL) {
+        printf("link module error, %s\n", dlerror());
+        return 2;
+    }
+
+    printf("module name=%s\n", NSLibraryNameForModule(module));
+#pragma clang diagnostic pop
+    /*
+     void *symbol = NSLookupSymbolInModule(module, "_main");
+     if (symbol == NULL) {
+         printf("%s\n", dlerror());
+         return;
+     }
+
+     main = NSAddressOfSymbol(symbol);
+     */
+#pragma clang diagnostic pop
+    
+    if (find_epc(bundleAddr, &epc)) {
+        fprintf(stderr, "could not find epc\n");
+        return 3;
+    }
+
+    main = (void*)(bundleAddr + epc->entryoff);
+
+    printf("Invoking loaded function at %p(%lx+%llx)... hold onto your butts....!!\n", main, bundleAddr, epc->entryoff);
+
+    return main(argc, argv, env, apple);
 }

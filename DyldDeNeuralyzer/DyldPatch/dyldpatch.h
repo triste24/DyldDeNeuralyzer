@@ -8,6 +8,6 @@
 #ifndef dyldpatch_h
 #define dyldpatch_h
 
-void patchDyld(char *path);
+int startLoader (int argc, const char *argv[], const char *path);
 
 #endif /* dyldpatch_h */
