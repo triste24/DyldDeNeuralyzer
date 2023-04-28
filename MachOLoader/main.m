@@ -1,6 +1,11 @@
+//  main.m
+//  MachOLoader
+//
+//  Created by triste24 on 2023/4/28.
+//
+
 #import <Foundation/Foundation.h>
-#import "macholoader.h"
-#include "dyldpatch.h"
+#include "MachOLoader.h"
 
 int main (int argc, const char *argv[]) {
     NSString *path = [NSString stringWithUTF8String:argv[0]];

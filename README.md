@@ -1,4 +1,4 @@
-## Dyld-DeNeuralyzer
+## MachOLoader
 
 A simple set of POCs to demonstrate in-memory loading of Mach-O's like Wechat or something, so that you can do remote injection.
 
@@ -11,7 +11,7 @@ A simple set of POCs to demonstrate in-memory loading of Mach-O's like Wechat or
 mv /Applications/WeChat.app/Contents/MacOS/WeChat /Applications/WeChat.app/Contents/MacOS/Backup
 
 //move loader to exe path
-cp ./DyldDeNeuralyzer /Applications/WeChat.app/Contents/MacOS/Wechat 
+cp ./MachOLoader /Applications/WeChat.app/Contents/MacOS/Wechat 
 
 //check codesign
 codesign -vvd /Applications/WeChat.app/Contents/MacOS/WeChat

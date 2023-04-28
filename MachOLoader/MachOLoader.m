@@ -1,3 +1,9 @@
+//  MachOLoader.m
+//  MachOLoader
+//
+//  Created by triste24 on 2023/4/28.
+//
+
 #import <Foundation/Foundation.h>
 
 #include <dlfcn.h>
@@ -8,7 +14,7 @@
 #include <mach-o/nlist.h>
 #include <mach-o/dyld.h>
 #include <mach-o/dyld_images.h>
-#include "dyldpatch.h"
+#include "MachOLoader.h"
 
 const char *dylibName        = "NSCreateObjectFileImageFromMemory";
 char       *memoryLoadedFile = NULL;
